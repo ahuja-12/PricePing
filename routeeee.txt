@@ -1,0 +1,37 @@
+/ app/api/products/route.js
+
+import { MongoClient } from "mongodb";
+import { NextResponse } from "next/server";
+
+const uri = process.env.MONGODB_URI;
+const client = new MongoClient(uri);
+
+export async function GET() {
+  try {
+    await client.connect();
+    const db = client.db("priceTracker");
+    const collection = db.collection("products");
+
+    // ✅ Get latest entry per ASIN
+    const pipeline = [
+      { $sort: { time: -1 } },  // newest first
+      {
+        $group: {
+          _id: "$asin",
+          title: { $first: "$title" },
+          priceInt: { $first: "$priceInt" },
+          asin: { $first: "$asin" },
+        },
+      },
+    ];
+
+    const result = await collection.aggregate(pipeline).toArray();
+
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error("DB error", error);
+    return NextResponse.json({ error: "Failed to fetch data" }, { status: 500 });
+  } finally {
+    await client.close();
+  }
+}
